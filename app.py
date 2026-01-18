@@ -178,7 +178,7 @@ if st.button("Unlock"):
     )
     st.success("Unlocked. Loading app…")
 
-            _append_jsonl(
+_append_jsonl(
                 os.path.join(_data_dir(), "unlock_log.jsonl"),
                 
             st.rerun()
