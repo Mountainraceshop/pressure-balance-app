@@ -1,6 +1,5 @@
-
-"""Suspension Engineering – Pressure Balance App (Cubic 6‑Point)
-
+"""
+Suspension Engineering – Pressure Balance App (Cubic 6‑Point)
 Locked web version (PayPal-gated).
 
 Copyright / TM
@@ -19,16 +18,21 @@ import os
 from datetime import datetime, timezone
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+import matplotlib.pyplot as plt
+
+
+# Streamlit requires page config before any other Streamlit calls.
+st.set_page_config(
+    page_title="Suspension Engineering – Pressure Balance & Adjuster Authority",
+    layout="wide",
+)
 
 
 def _get_cfg(key: str, default: str = "") -> str:
-    """Read config from environment first, then Streamlit secrets if available.
-
-    On some hosts (e.g. Render), st.secrets may be unavailable unless a secrets.toml is provided.
-    This helper avoids StreamlitSecretNotFoundError by catching any secrets access errors.
-    """
+    """Read config from environment first, then Streamlit secrets if available."""
     v = os.getenv(key, "")
     if v:
         return v
@@ -36,18 +40,14 @@ def _get_cfg(key: str, default: str = "") -> str:
         return st.secrets.get(key, default)
     except Exception:
         return default
-# Streamlit requires page config before any other Streamlit calls.
-st.set_page_config(page_title="Suspension Engineering – Pressure Balance & Adjuster Authority", layout="wide")
 
 
 def _get_query_params() -> dict:
     """Compatibility wrapper across Streamlit versions."""
     try:
-        # New API
-        return dict(st.query_params)
+        return dict(st.query_params)  # Streamlit >= 1.30
     except Exception:
-        # Old API
-        return st.experimental_get_query_params()
+        return st.experimental_get_query_params()  # legacy
 
 
 def _data_dir() -> str:
@@ -62,10 +62,10 @@ def _append_jsonl(path: str, payload: dict) -> None:
 
 
 def paypal_subscribe_button_html(client_id: str, plan_id: str) -> str:
-    # PayPal JS SDK subscription button. On approve, redirects back with subscription_id.
+    """PayPal JS SDK subscription button. On approve, redirects back with subscription_id."""
     return f"""
-<div id=\"paypal-button-container\"></div>
-<script src=\"https://www.paypal.com/sdk/js?client-id={client_id}&vault=true&intent=subscription\"></script>
+<div id="paypal-button-container"></div>
+<script src="https://www.paypal.com/sdk/js?client-id={client_id}&vault=true&intent=subscription"></script>
 <script>
   paypal.Buttons({{
     style: {{ shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' }},
@@ -85,9 +85,9 @@ def paypal_subscribe_button_html(client_id: str, plan_id: str) -> str:
 def ensure_unlocked() -> None:
     """Gate the app behind PayPal subscription ID.
 
-    This intentionally keeps verification lightweight (stores subscription ID + email for records).
+    Lightweight verification: stores subscription ID + email for records.
     """
-
+    # Admin bypass (optional)
     if os.getenv("PAYMENT_DISABLED", "0") == "1":
         st.session_state["unlocked"] = True
         return
@@ -95,12 +95,12 @@ def ensure_unlocked() -> None:
     if st.session_state.get("unlocked"):
         return
 
+    # Read subscription_id from query param (after PayPal approve redirect)
     qp = _get_query_params()
-    sub_id = None
-    # handle both dict/list formats
+    sub_id_from_qp = ""
     if "subscription_id" in qp:
         v = qp["subscription_id"]
-        sub_id = v[0] if isinstance(v, list) else v
+        sub_id_from_qp = v[0] if isinstance(v, list) else str(v)
 
     st.title("Pressure Balance App")
     st.caption("Mountain Race Shop™ | Suspension Engineering™")
@@ -120,67 +120,60 @@ This tool converts dyno force data into internal pressures so your setup decisio
     plan_id = _get_cfg("PAYPAL_PLAN_ID")
 
     col1, col2 = st.columns([1, 1])
+
     with col1:
         st.subheader("Unlock access")
         st.write("Subscribe to unlock the app.")
 
-        # Keep the email input close to the Unlock button so it's never missed.
-if "email" not in st.session_state:
-    st.session_state.email = ""
+        # Email input (must always be editable)
+        st.session_state.setdefault("email", "")
+        email = st.text_input(
+            "Email (for receipt + access records)",
+            key="email_input",
+            value=st.session_state["email"],
+        )
+        st.session_state["email"] = email
 
-email = st.text_input(
-    "Email (for receipt + access records)",
-    key="email_input",
-    value=st.session_state.email
-)
-st.session_state.email = email
+        # PayPal subscribe button (optional)
+        if client_id and plan_id:
+            components.html(
+                paypal_subscribe_button_html(client_id, plan_id),
+                height=220,
+            )
+        else:
+            st.warning(
+                "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
+            )
 
-if client_id and plan_id:
-    components.html(
-        paypal_subscribe_button_html(client_id, plan_id),
-        height=220
-    )
-else:
-    st.warning(
-        "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
-    )
+        st.write("Already subscribed? Paste your PayPal subscription ID:")
 
-st.write("Already subscribed? Paste your PayPal subscription ID:")
+        manual_sub_id = st.text_input(
+            "Subscription ID",
+            value=sub_id_from_qp,
+            key="sub_id_input",
+        )
+        sub_id_final = (manual_sub_id or "").strip() or (sub_id_from_qp or "").strip()
 
-# Prefill defensively (sub_id might not exist depending on PayPal flow)
-_sub_id_prefill = ""
-try:
-    _sub_id_prefill = sub_id or ""
-except Exception:
-    _sub_id_prefill = ""
+        if st.button("Unlock", key="unlock_btn"):
+            if not email.strip():
+                st.error("Please enter your email.")
+                st.stop()
 
-manual_sub_id = st.text_input("Subscription ID", value=_sub_id_prefill, key="sub_id_input")
-sub_id_final = manual_sub_id.strip() or _sub_id_prefill
+            if not sub_id_final:
+                st.error("Please enter a subscription ID.")
+                st.stop()
 
-if st.button("Unlock"):
-    if not email.strip():
-        st.error("Please enter your email.")
-        st.stop()
-
-    if not sub_id_final:
-        st.error("Please enter a subscription ID.")
-        st.stop()
-
-    st.session_state["unlocked"] = True
-    _append_jsonl(
-        os.path.join(_data_dir(), "unlock_log.jsonl"),
-        {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "email": email.strip(),
-            "subscription_id": sub_id_final,
-            "app": "pressure_balance_cubic6",
-        },
-    )
-    st.success("Unlocked. Loading app…")
-
-_append_jsonl(
+            st.session_state["unlocked"] = True
+            _append_jsonl(
                 os.path.join(_data_dir(), "unlock_log.jsonl"),
-                
+                {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "email": email.strip(),
+                    "subscription_id": sub_id_final,
+                    "app": "pressure_balance_cubic6",
+                },
+            )
+            st.success("Unlocked. Loading app…")
             st.rerun()
 
     with col2:
@@ -202,6 +195,19 @@ Then choose Linear / Quadratic / Cubic and compare how well each model fits your
     st.stop()
 
 
+def fit_curve(x: np.ndarray, y: np.ndarray, model_name: str):
+    deg = {"Linear": 1, "Quadratic": 2, "Cubic": 3}[model_name]
+    uniq = len(np.unique(x))
+    if uniq <= deg:
+        deg = max(0, uniq - 1)
+    coeffs = np.polyfit(x, y, deg) if deg > 0 else np.array([float(np.mean(y))])
+    poly = np.poly1d(coeffs)
+    return poly, deg
+
+
+# -------------------------
+# App starts here
+# -------------------------
 ensure_unlocked()
 
 st.title("Suspension Engineering – Pressure Balance, Adjuster Authority & Damping Targets")
@@ -223,25 +229,18 @@ f_adj = []
 f_full = []
 for i in range(6):
     with cols[i]:
-        v.append(st.number_input(f"V{i+1} (m/s)", value=0.5*(i+1)))
-        f_adj.append(st.number_input(f"Adj-only F{i+1} (N)", value=300*(i+1)))
-        f_full.append(st.number_input(f"Full F{i+1} (N)", value=1200*(i+1)))
+        v.append(st.number_input(f"V{i+1} (m/s)", value=0.5 * (i + 1)))
+        f_adj.append(st.number_input(f"Adj-only F{i+1} (N)", value=300 * (i + 1)))
+        f_full.append(st.number_input(f"Full F{i+1} (N)", value=1200 * (i + 1)))
 
 v = np.array(v, dtype=float)
 f_adj = np.array(f_adj, dtype=float)
 f_full = np.array(f_full, dtype=float)
 
-def fit_curve(x, y, model):
-    deg = {"Linear":1, "Quadratic":2, "Cubic":3}[model]
-    if len(np.unique(x)) <= deg:
-        deg = len(np.unique(x)) - 1
-    coeffs = np.polyfit(x, y, deg)
-    return np.poly1d(coeffs), deg
-
 curve_adj, used_deg_adj = fit_curve(v, f_adj, model)
 curve_full, used_deg_full = fit_curve(v, f_full, model)
 
-v_dense = np.linspace(min(v), max(v), 200)
+v_dense = np.linspace(float(np.min(v)), float(np.max(v)), 200) if len(v) else np.array([0.0])
 adj_dense = curve_adj(v_dense)
 full_dense = curve_full(v_dense)
 
@@ -249,36 +248,45 @@ st.subheader("Results")
 st.write(f"Adj-only model used: Degree {used_deg_adj}")
 st.write(f"Full-force model used: Degree {used_deg_full}")
 
-st.line_chart({
-    "Velocity (m/s)": v_dense,
-    "Adj-only force (N)": adj_dense,
-    "Full force (N)": full_dense
-})
+df_comp = pd.DataFrame(
+    {
+        "Adj-only force (N)": adj_dense,
+        "Full force (N)": full_dense,
+    },
+    index=v_dense,
+)
+df_comp.index.name = "Velocity (m/s)"
+st.line_chart(df_comp)
 
-peak_adj_ratio = max(f_adj / f_full) * 100
+with np.errstate(divide="ignore", invalid="ignore"):
+    ratio = np.where(f_full != 0, f_adj / f_full, np.nan)
+peak_adj_ratio = float(np.nanmax(ratio) * 100) if np.isfinite(np.nanmax(ratio)) else 0.0
 
 st.markdown("## Rebound – 6 Point Definition")
 
 rv = []
 rf_adj = []
 rf_full = []
-for i in range(1,7):
-    rv.append(st.number_input(f"R V{i} (m/s)", value=float(i)*0.5, key=f"rv{i}"))
-    rf_adj.append(st.number_input(f"Rebound Adj-only F{i} (N)", value=500*i, key=f"rfadj{i}"))
-    rf_full.append(st.number_input(f"Rebound Full F{i} (N)", value=1500*i, key=f"rffull{i}"))
+for i in range(1, 7):
+    rv.append(st.number_input(f"R V{i} (m/s)", value=float(i) * 0.5, key=f"rv{i}"))
+    rf_adj.append(st.number_input(f"Rebound Adj-only F{i} (N)", value=500 * i, key=f"rfadj{i}"))
+    rf_full.append(st.number_input(f"Rebound Full F{i} (N)", value=1500 * i, key=f"rffull{i}"))
 
-rv = np.array(rv)
-rf_adj = np.array(rf_adj)
-rf_full = np.array(rf_full)
+rv = np.array(rv, dtype=float)
+rf_adj = np.array(rf_adj, dtype=float)
+rf_full = np.array(rf_full, dtype=float)
 
-r_curve_adj, used_r_deg_adj = fit_curve(rv, rf_adj, curve_model)
-r_curve_full, used_r_deg_full = fit_curve(rv, rf_full, curve_model)
+r_curve_adj, used_r_deg_adj = fit_curve(rv, rf_adj, model)
+r_curve_full, used_r_deg_full = fit_curve(rv, rf_full, model)
 
-rv_dense = np.linspace(min(rv), max(rv), 100)
+rv_dense = np.linspace(float(np.min(rv)), float(np.max(rv)), 200) if len(rv) else np.array([0.0])
 r_adj_dense = r_curve_adj(rv_dense)
 r_full_dense = r_curve_full(rv_dense)
 
 st.markdown("### Rebound Results")
+st.write(f"Rebound Adj-only model used: Degree {used_r_deg_adj}")
+st.write(f"Rebound Full-force model used: Degree {used_r_deg_full}")
+
 fig2, ax2 = plt.subplots()
 ax2.plot(rv_dense, r_adj_dense, label="Rebound Adj-only")
 ax2.plot(rv_dense, r_full_dense, label="Rebound Full")
@@ -286,7 +294,6 @@ ax2.legend()
 ax2.set_xlabel("Velocity (m/s)")
 ax2.set_ylabel("Force (N)")
 st.pyplot(fig2)
-
 
 st.metric("Peak Adjuster %", f"{peak_adj_ratio:.1f}%")
 
