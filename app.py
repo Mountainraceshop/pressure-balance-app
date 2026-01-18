@@ -18,12 +18,14 @@ import json
 import os
 from datetime import datetime, timezone
 
- numpy as np
+numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
+
 # Streamlit requires page config before any other Streamlit calls.
 st.set_page_config(page_title="Suspension Engineering – Pressure Balance & Adjuster Authority", layout="wide")
 
+st.write("build:", "2026-01-18 13:40 AEST")
 
 def _get_query_params() -> dict:
     """Compatibility wrapper across Streamlit versions."""
