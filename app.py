@@ -18,7 +18,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-import numpy as np
+ numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
 # Streamlit requires page config before any other Streamlit calls.
@@ -104,8 +104,8 @@ This tool converts dyno force data into internal pressures so your setup decisio
     # Collect email + show PayPal button
     email = st.text_input("Email (for receipt + access records)")
 
-    client_id = st.secrets.get("PAYPAL_CLIENT_ID", os.getenv("PAYPAL_CLIENT_ID", ""))
-    plan_id = st.secrets.get("PAYPAL_PLAN_ID", os.getenv("PAYPAL_PLAN_ID", ""))
+    client_id = os.getenv("PAYPAL_CLIENT_ID","")
+    plan_id = os.getenv("PAYPAL_PLAN_ID", "")
 
     col1, col2 = st.columns([1, 1])
     with col1:
