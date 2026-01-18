@@ -135,15 +135,19 @@ email = st.text_input(
 )
 st.session_state.email = email
 
-            
-        if client_id and plan_id:
-            components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
-        else:
-            st.warning(
-                "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
-            )
+if client_id and plan_id:
+    components.html(
+        paypal_subscribe_button_html(client_id, plan_id),
+        height=220
+    )
+else:
+    st.warning(
+        "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
+    )
 
-        st.write("Already subscribed? Paste your PayPal subscription ID:")
+
+
+    st.write("Already subscribed? Paste your PayPal subscription ID:")
         # Be defensive: if 'sub_id' isn't available for any reason, fall back to blank.
         try:
             _sub_id_prefill = sub_id or ""
