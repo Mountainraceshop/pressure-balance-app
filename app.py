@@ -107,7 +107,7 @@ ensure_unlocked()
 st.title("Pressure Balance App")
 st.caption("Mountain Race Shop™ | Suspension Engineering™")
 
-    st.markdown(
+st.markdown(
         """
 **Why pressure balance matters**
 
