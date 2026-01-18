@@ -116,9 +116,6 @@ This tool converts dyno force data into internal pressures so your setup decisio
         """
     )
 
-    # Collect email + show PayPal button
-    email = st.text_input("Email (for receipt + access records)")
-
     client_id = _get_cfg("PAYPAL_CLIENT_ID")
     plan_id = _get_cfg("PAYPAL_PLAN_ID")
 
@@ -126,6 +123,13 @@ This tool converts dyno force data into internal pressures so your setup decisio
     with col1:
         st.subheader("Unlock access")
         st.write("Subscribe to unlock the app.")
+
+        # Keep the email input close to the Unlock button so it's never missed.
+        email = st.text_input(
+            "Email (for receipt + access records)",
+            key="unlock_email",
+            placeholder="you@company.com",
+        )
 
         if client_id and plan_id:
             components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
