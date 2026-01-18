@@ -21,11 +21,9 @@ from datetime import datetime, timezone
 import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
-
 # Streamlit requires page config before any other Streamlit calls.
 st.set_page_config(page_title="Suspension Engineering – Pressure Balance & Adjuster Authority", layout="wide")
 
-st.write("RUNNING BUILD: 18 JAN 2026 - EMAIL FIX TEST")
 
 def _get_query_params() -> dict:
     """Compatibility wrapper across Streamlit versions."""
@@ -106,8 +104,8 @@ This tool converts dyno force data into internal pressures so your setup decisio
     # Collect email + show PayPal button
     email = st.text_input("Email (for receipt + access records)")
 
-    client_id = os.getenv("PAYPAL_CLIENT_ID","")
-    plan_id = os.getenv("PAYPAL_PLAN_ID", "")
+    client_id = st.secrets.get("PAYPAL_CLIENT_ID", os.getenv("PAYPAL_CLIENT_ID", ""))
+    plan_id = st.secrets.get("PAYPAL_PLAN_ID", os.getenv("PAYPAL_PLAN_ID", ""))
 
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -125,7 +123,6 @@ This tool converts dyno force data into internal pressures so your setup decisio
         manual_sub_id = st.text_input("Subscription ID", value=sub_id or "")
         sub_id_final = manual_sub_id.strip() or (sub_id or "")
 
-        email = st.text_input("email (type here)", key="unlock_email")
         if st.button("Unlock"):
             if not email.strip():
                 st.error("Please enter your email.")
@@ -220,8 +217,41 @@ st.line_chart({
 })
 
 peak_adj_ratio = max(f_adj / f_full) * 100
+
+st.markdown("## Rebound – 6 Point Definition")
+
+rv = []
+rf_adj = []
+rf_full = []
+for i in range(1,7):
+    rv.append(st.number_input(f"R V{i} (m/s)", value=float(i)*0.5, key=f"rv{i}"))
+    rf_adj.append(st.number_input(f"Rebound Adj-only F{i} (N)", value=500*i, key=f"rfadj{i}"))
+    rf_full.append(st.number_input(f"Rebound Full F{i} (N)", value=1500*i, key=f"rffull{i}"))
+
+rv = np.array(rv)
+rf_adj = np.array(rf_adj)
+rf_full = np.array(rf_full)
+
+r_coef_adj = np.polyfit(rv, rf_adj, deg)
+r_coef_full = np.polyfit(rv, rf_full, deg)
+rv_dense = np.linspace(min(rv), max(rv), 100)
+r_adj_dense = np.polyval(r_coef_adj, rv_dense)
+r_full_dense = np.polyval(r_coef_full, rv_dense)
+
+st.markdown("### Rebound Results")
+fig2, ax2 = plt.subplots()
+ax2.plot(rv_dense, r_adj_dense, label="Rebound Adj-only")
+ax2.plot(rv_dense, r_full_dense, label="Rebound Full")
+ax2.legend()
+ax2.set_xlabel("Velocity (m/s)")
+ax2.set_ylabel("Force (N)")
+st.pyplot(fig2)
+
+
 st.metric("Peak Adjuster %", f"{peak_adj_ratio:.1f}%")
 
 st.info("Target band typically 15–20%. Above this = adjuster doing too much of the job.")
+if peak_adj_ratio < 15:
+    st.warning("Adjuster below 15% authority will have little to no real effect.")
 
-st.caption("© Mountain Race Shop™ 2025–2026")
+st.caption("© Mountain Race Shop™ 2025–2026 | Support: fenianparktrading@gmail.com")
