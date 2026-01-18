@@ -87,7 +87,7 @@ def ensure_unlocked() -> None:
 
     This intentionally keeps verification lightweight (stores subscription ID + email for records).
     """
-  
+
     if os.getenv("PAYMENT_DISABLED", "0") == "1":
         st.session_state["unlocked"] = True
         return
@@ -102,12 +102,10 @@ def ensure_unlocked() -> None:
         v = qp["subscription_id"]
         sub_id = v[0] if isinstance(v, list) else v
 
-ensure_unlocked()
-    
-st.title("Pressure Balance App")
-st.caption("Mountain Race Shop™ | Suspension Engineering™")
+    st.title("Pressure Balance App")
+    st.caption("Mountain Race Shop™ | Suspension Engineering™")
 
-st.markdown(
+    st.markdown(
         """
 **Why pressure balance matters**
 
@@ -118,55 +116,54 @@ This tool converts dyno force data into internal pressures so your setup decisio
         """
     )
 
-   # Collect email + show PayPal button
-if "email" not in st.session_state:
-    st.session_state["email"] = ""
+    # Collect email + show PayPal button
+    email = st.text_input("Email (for receipt + access records)")
 
-email = st.text_input("Email (for receipt + access records)", key="email")
+    client_id = _get_cfg("PAYPAL_CLIENT_ID")
+    plan_id = _get_cfg("PAYPAL_PLAN_ID")
 
-client_id = _get_cfg("PAYPAL_CLIENT_ID")
-plan_id = _get_cfg("PAYPAL_PLAN_ID")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("Unlock access")
+        st.write("Subscribe to unlock the app.")
 
-col1, col2 = st.columns([1, 1])
-with col1:
-    st.subheader("Unlock access")
-    st.write("Subscribe to unlock the app.")
-
-    if client_id and plan_id:
-        
-        components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
-    else:
-        st.warning(
+        if client_id and plan_id:
+            components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
+        else:
+            st.warning(
                 "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
             )
 
-    st.write("Already subscribed? Paste your PayPal subscription ID:")
-    
-    sub_id = ""
-    
-    manual_sub_id = st.text_input("Subscription ID", value=sub_id)
-    
-    sub_id_final = manual_sub_id.strip() 
+        st.write("Already subscribed? Paste your PayPal subscription ID:")
+        # Be defensive: if 'sub_id' isn't available for any reason, fall back to blank.
+        try:
+            _sub_id_prefill = sub_id or ""
+        except NameError:
+            _sub_id_prefill = ""
 
-    if st.button("Unlock"):
-        if not email.strip():
+        manual_sub_id = st.text_input("Subscription ID", value=_sub_id_prefill)
+        sub_id_final = manual_sub_id.strip() or _sub_id_prefill
+
+        if st.button("Unlock"):
+            if not email.strip():
                 st.error("Please enter your email.")
                 st.stop()
-        if not sub_id_final:
+            if not sub_id_final:
                 st.error("Please enter a subscription ID.")
                 st.stop()
 
-        st.session_state["unlocked"] = True
-        _append_jsonl(
-        os.path.join(_data_dir(), "unlock_log.jsonl"),
+            st.session_state["unlocked"] = True
+            _append_jsonl(
+                os.path.join(_data_dir(), "unlock_log.jsonl"),
                 {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "email": email.strip(),
-            "subscription_id": sub_id_final,
-            "app": "pressure_balance_cubic6",
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "email": email.strip(),
+                    "subscription_id": sub_id_final,
+                    "app": "pressure_balance_cubic6",
                 },
             )
-        st.success("Unlocked. Loading app…")
+            st.success("Unlocked. Loading app…")
+            st.rerun()
 
     with col2:
         st.subheader("What you need")
@@ -184,10 +181,10 @@ Then choose Linear / Quadratic / Cubic and compare how well each model fits your
 
     st.markdown("---")
     st.caption("© Mountain Race Shop™ 2025–2026. All rights reserved.")
-    
+    st.stop()
 
 
-
+ensure_unlocked()
 
 st.title("Suspension Engineering – Pressure Balance, Adjuster Authority & Damping Targets")
 st.caption("© Mountain Race Shop™ 2025–2026. All rights reserved.")
@@ -256,11 +253,12 @@ rv = np.array(rv)
 rf_adj = np.array(rf_adj)
 rf_full = np.array(rf_full)
 
-r_coef_adj = np.polyfit(rv, rf_adj, deg)
-r_coef_full = np.polyfit(rv, rf_full, deg)
+r_curve_adj, used_r_deg_adj = fit_curve(rv, rf_adj, curve_model)
+r_curve_full, used_r_deg_full = fit_curve(rv, rf_full, curve_model)
+
 rv_dense = np.linspace(min(rv), max(rv), 100)
-r_adj_dense = np.polyval(r_coef_adj, rv_dense)
-r_full_dense = np.polyval(r_coef_full, rv_dense)
+r_adj_dense = r_curve_adj(rv_dense)
+r_full_dense = r_curve_full(rv_dense)
 
 st.markdown("### Rebound Results")
 fig2, ax2 = plt.subplots()
