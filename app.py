@@ -141,8 +141,8 @@ with col1:
             )
 
     st.write("Already subscribed? Paste your PayPal subscription ID:")
-        manual_sub_id = st.text_input("Subscription ID", value=sub_id or "")
-        sub_id_final = manual_sub_id.strip() or (sub_id or "")
+    manual_sub_id = st.text_input("Subscription ID", value=sub_id or "")
+    sub_id_final = manual_sub_id.strip() or (sub_id or "")
 
         if st.button("Unlock"):
             if not email.strip():
