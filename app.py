@@ -145,25 +145,25 @@ else:
         "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
     )
 
+st.write("Already subscribed? Paste your PayPal subscription ID:")
 
+# Prefill defensively (sub_id might not exist depending on PayPal flow)
+_sub_id_prefill = ""
+try:
+    _sub_id_prefill = sub_id or ""
+except Exception:
+    _sub_id_prefill = ""
 
-    st.write("Already subscribed? Paste your PayPal subscription ID:")
-        # Be defensive: if 'sub_id' isn't available for any reason, fall back to blank.
-        try:
-            _sub_id_prefill = sub_id or ""
-        except NameError:
-            _sub_id_prefill = ""
-
-        manual_sub_id = st.text_input("Subscription ID", value=_sub_id_prefill)
-        sub_id_final = manual_sub_id.strip() or _sub_id_prefill
-
-        if st.button("Unlock"):
-            if not email.strip():
-                st.error("Please enter your email.")
-                st.stop()
-            if not sub_id_final:
-                st.error("Please enter a subscription ID.")
-                st.stop()
+manual_sub_id = st.text_input("Subscription ID", value=_sub_id_prefill, key="sub_id_input")
+sub_id_final = manual_sub_id.strip() or _sub_id_prefill
+    
+if st.button("Unlock"):
+    if not email.strip():
+        st.error("Please enter your email.")
+        st.stop()
+    if not sub_id_final:
+        st.error("Please enter a subscription ID.")
+        st.stop()
 
             st.session_state["unlocked"] = True
             _append_jsonl(
