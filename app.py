@@ -156,26 +156,31 @@ except Exception:
 
 manual_sub_id = st.text_input("Subscription ID", value=_sub_id_prefill, key="sub_id_input")
 sub_id_final = manual_sub_id.strip() or _sub_id_prefill
-    
+
 if st.button("Unlock"):
     if not email.strip():
         st.error("Please enter your email.")
         st.stop()
+
     if not sub_id_final:
         st.error("Please enter a subscription ID.")
         st.stop()
 
-            st.session_state["unlocked"] = True
+    st.session_state["unlocked"] = True
+    _append_jsonl(
+        os.path.join(_data_dir(), "unlock_log.jsonl"),
+        {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "email": email.strip(),
+            "subscription_id": sub_id_final,
+            "app": "pressure_balance_cubic6",
+        },
+    )
+    st.success("Unlocked. Loading app…")
+
             _append_jsonl(
                 os.path.join(_data_dir(), "unlock_log.jsonl"),
-                {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "email": email.strip(),
-                    "subscription_id": sub_id_final,
-                    "app": "pressure_balance_cubic6",
-                },
-            )
-            st.success("Unlocked. Loading app…")
+                
             st.rerun()
 
     with col2:
