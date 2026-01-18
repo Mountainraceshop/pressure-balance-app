@@ -124,22 +124,23 @@ if "email" not in st.session_state:
 
 email = st.text_input("Email (for receipt + access records)", key="email")
 
-    client_id = _get_cfg("PAYPAL_CLIENT_ID")
-    plan_id = _get_cfg("PAYPAL_PLAN_ID")
+client_id = _get_cfg("PAYPAL_CLIENT_ID")
+plan_id = _get_cfg("PAYPAL_PLAN_ID")
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("Unlock access")
-        st.write("Subscribe to unlock the app.")
+col1, col2 = st.columns([1, 1])
+with col1:
+    st.subheader("Unlock access")
+    st.write("Subscribe to unlock the app.")
 
-        if client_id and plan_id:
-            components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
-        else:
-            st.warning(
+    if client_id and plan_id:
+        
+        components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
+    else:
+        st.warning(
                 "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
             )
 
-        st.write("Already subscribed? Paste your PayPal subscription ID:")
+    st.write("Already subscribed? Paste your PayPal subscription ID:")
         manual_sub_id = st.text_input("Subscription ID", value=sub_id or "")
         sub_id_final = manual_sub_id.strip() or (sub_id or "")
 
