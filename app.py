@@ -144,15 +144,15 @@ with col1:
     manual_sub_id = st.text_input("Subscription ID", value=sub_id or "")
     sub_id_final = manual_sub_id.strip() or (sub_id or "")
 
-        if st.button("Unlock"):
-            if not email.strip():
+    if st.button("Unlock"):
+        if not email.strip():
                 st.error("Please enter your email.")
                 st.stop()
-            if not sub_id_final:
+        if not sub_id_final:
                 st.error("Please enter a subscription ID.")
                 st.stop()
 
-            st.session_state["unlocked"] = True
+        st.session_state["unlocked"] = True
             _append_jsonl(
                 os.path.join(_data_dir(), "unlock_log.jsonl"),
                 {
