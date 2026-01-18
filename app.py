@@ -2,13 +2,8 @@
 Suspension Engineering – Pressure Balance App (Cubic 6-Point)
 Locked web version (PayPal-gated).
 
-Copyright / TM
-- Mountain Race Shop™ & Suspension Engineering™
-- © Mountain Race Shop™ 2025–2026. All rights reserved.
-
-Notes
-- This is a decision-support tool only.
-- All outputs are provided "as is".
+© Mountain Race Shop™ 2025–2026. All rights reserved.
+Support: fenianparktrading@gmail.com
 """
 
 from __future__ import annotations
@@ -22,16 +17,15 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 
-# Streamlit requires page config before any other Streamlit calls.
+# Must be first Streamlit call
 st.set_page_config(
     page_title="Suspension Engineering – Pressure Balance & Adjuster Authority",
     layout="wide",
 )
 
 
-# ---------- Helpers ----------
+# ----------------- Helpers -----------------
 def _get_cfg(key: str, default: str = "") -> str:
-    """Read config from environment first, then Streamlit secrets if available."""
     v = os.getenv(key, "")
     if v:
         return v
@@ -42,7 +36,6 @@ def _get_cfg(key: str, default: str = "") -> str:
 
 
 def _get_query_params() -> dict:
-    """Compatibility wrapper across Streamlit versions."""
     try:
         return dict(st.query_params)  # new API
     except Exception:
@@ -61,7 +54,6 @@ def _append_jsonl(path: str, payload: dict) -> None:
 
 
 def paypal_subscribe_button_html(client_id: str, plan_id: str) -> str:
-    """PayPal JS SDK subscription button. On approve, redirects back with subscription_id."""
     return f"""
 <div id="paypal-button-container"></div>
 <script src="https://www.paypal.com/sdk/js?client-id={client_id}&vault=true&intent=subscription"></script>
@@ -81,13 +73,8 @@ def paypal_subscribe_button_html(client_id: str, plan_id: str) -> str:
 """
 
 
+# ----------------- Unlock gate -----------------
 def ensure_unlocked() -> None:
-    """Gate the app behind PayPal subscription ID.
-
-    Lightweight verification: stores subscription ID + email for records.
-    """
-
-    # Emergency bypass (optional)
     if os.getenv("PAYMENT_DISABLED", "0") == "1":
         st.session_state["unlocked"] = True
         return
@@ -96,133 +83,97 @@ def ensure_unlocked() -> None:
         return
 
     qp = _get_query_params()
-    sub_id = ""
+    sub_id_from_url = ""
     if "subscription_id" in qp:
         v = qp["subscription_id"]
-        sub_id = v[0] if isinstance(v, list) else str(v)
-
-    st.title("Pressure Balance App")
-    st.caption("Mountain Race Shop™ | Suspension Engineering™")
-
-    st.markdown(
-        """
-**Why pressure balance matters**
-
-Suspension performance is controlled by pressure — but pressure is rarely measured directly.
-This tool converts dyno force data into internal pressures so your setup decisions are based on physics, not guesswork.
-
-**Core principle:** Force = Area × Pressure → Pressure = Force ÷ Area
-        """
-    )
+        sub_id_from_url = v[0] if isinstance(v, list) else str(v)
 
     client_id = _get_cfg("PAYPAL_CLIENT_ID")
     plan_id = _get_cfg("PAYPAL_PLAN_ID")
 
-    col1, col2 = st.columns([1, 1])
+    st.title("Unlock access")
+    st.write("Subscribe to unlock the app.")
 
-    with col1:
-        st.subheader("Unlock access")
-        st.write("Subscribe to unlock the app.")
+    # IMPORTANT: initialize session_state keys ONCE, then use key= only (no value=)
+    if "email_input" not in st.session_state:
+        st.session_state["email_input"] = ""
+    if "sub_id_input" not in st.session_state:
+        st.session_state["sub_id_input"] = sub_id_from_url or ""
 
-        # Email input (make it stable + always editable)
-        if "email_value" not in st.session_state:
-            st.session_state["email_value"] = ""
+    # Keep email above the PayPal iframe (and do NOT write back manually)
+    st.text_input(
+        "Email (for receipt + access records)",
+        key="email_input",
+        placeholder="you@company.com",
+    )
 
-        email = st.text_input(
-            "Email (for receipt + access records)",
-            key="email_input",
-            value=st.session_state["email_value"],
-            placeholder="you@company.com",
+    if client_id and plan_id:
+        components.html(
+            paypal_subscribe_button_html(client_id, plan_id),
+            height=240,
         )
-        st.session_state["email_value"] = email
-
-        if client_id and plan_id:
-            components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
-        else:
-            st.warning(
-                "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in Render environment variables."
-            )
-
-        st.write("Already subscribed? Paste your PayPal subscription ID:")
-
-        manual_sub_id = st.text_input(
-            "Subscription ID",
-            key="sub_id_input",
-            value=sub_id or "",
-            placeholder="I-XXXXXXXXXXXX",
-        )
-        sub_id_final = (manual_sub_id or "").strip() or (sub_id or "").strip()
-
-        if st.button("Unlock", key="unlock_btn"):
-            if not email.strip():
-                st.error("Please enter your email.")
-                st.stop()
-
-            if not sub_id_final:
-                st.error("Please enter a subscription ID.")
-                st.stop()
-
-            st.session_state["unlocked"] = True
-
-            _append_jsonl(
-                os.path.join(_data_dir(), "unlock_log.jsonl"),
-                {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "email": email.strip(),
-                    "subscription_id": sub_id_final,
-                    "app": "pressure_balance_cubic6",
-                },
-            )
-
-            st.success("Unlocked. Loading app…")
-            st.rerun()
-
-    with col2:
-        st.subheader("What you need")
-        st.markdown(
-            """
-- Baseline pressure P1 (bar)
-- Rod diameter (mm)
-- Body/piston diameter (mm)
-- **Up to 6 velocity points** (m/s)
-- Corresponding dyno forces (N): **Adj-only** and **Full**
-
-Then choose Linear / Quadratic / Cubic and compare how well each model fits your data.
-            """
+    else:
+        st.warning(
+            "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in Render environment variables."
         )
 
-    st.markdown("---")
+    st.write("Already subscribed? Paste your PayPal subscription ID:")
+
+    st.text_input(
+        "Subscription ID",
+        key="sub_id_input",
+        placeholder="I-XXXXXXXXXXXX",
+    )
+
+    if st.button("Unlock", key="unlock_btn"):
+        email = (st.session_state.get("email_input") or "").strip()
+        sub_id_final = (st.session_state.get("sub_id_input") or "").strip()
+
+        if not email:
+            st.error("Please enter your email.")
+            st.stop()
+
+        if not sub_id_final:
+            st.error("Please enter a subscription ID.")
+            st.stop()
+
+        st.session_state["unlocked"] = True
+
+        _append_jsonl(
+            os.path.join(_data_dir(), "unlock_log.jsonl"),
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "email": email,
+                "subscription_id": sub_id_final,
+                "app": "pressure_balance_cubic6",
+            },
+        )
+
+        st.success("Unlocked. Loading app…")
+        st.rerun()
+
     st.caption("© Mountain Race Shop™ 2025–2026. All rights reserved.")
     st.stop()
 
 
-# ---------- Curve fit ----------
+# ----------------- Curve fit -----------------
 def fit_curve(x: np.ndarray, y: np.ndarray, model_name: str):
     deg = {"Linear": 1, "Quadratic": 2, "Cubic": 3}[model_name]
-
-    # Reduce degree if not enough unique points
     unique_n = len(np.unique(x))
     if unique_n <= deg:
         deg = max(1, unique_n - 1)
-
     coeffs = np.polyfit(x, y, deg)
     return np.poly1d(coeffs), deg
 
 
-def line_chart_xy(x: np.ndarray, y1: np.ndarray, y2: np.ndarray, label1: str, label2: str):
-    """Try to chart with x-axis. If pandas isn't available, fall back to array chart."""
-    try:
-        import pandas as pd  # streamlit usually has this; but guard anyway
-
-        df = pd.DataFrame({label1: y1, label2: y2}, index=x)
-        df.index.name = "Velocity (m/s)"
-        st.line_chart(df)
-    except Exception:
-        # fallback (x-axis becomes row index)
-        st.line_chart(np.column_stack([y1, y2]))
+def chart_xy(x: np.ndarray, y1: np.ndarray, y2: np.ndarray, label1: str, label2: str):
+    # Avoid requiring pandas; Streamlit can chart arrays but x-axis becomes index.
+    # This still works reliably on Render.
+    data = np.column_stack([y1, y2])
+    st.line_chart(data)
 
 
-# ---------- Main ----------
+# ----------------- Main app -----------------
 ensure_unlocked()
 
 st.title("Suspension Engineering – Pressure Balance, Adjuster Authority & Damping Targets")
@@ -239,9 +190,7 @@ v_ref = st.sidebar.number_input("Velocity reference (m/s)", value=1.0, key="v_re
 st.header("Compression – 6 Point Definition")
 
 cols = st.columns(6)
-v = []
-f_adj = []
-f_full = []
+v, f_adj, f_full = [], [], []
 
 for i in range(6):
     with cols[i]:
@@ -263,22 +212,16 @@ full_dense = curve_full(v_dense)
 st.subheader("Compression Results")
 st.write(f"Adj-only model used: Degree {used_deg_adj}")
 st.write(f"Full-force model used: Degree {used_deg_full}")
-
-line_chart_xy(v_dense, adj_dense, full_dense, "Adj-only force (N)", "Full force (N)")
+chart_xy(v_dense, adj_dense, full_dense, "Adj-only", "Full")
 
 peak_adj_ratio = float(np.max(f_adj / np.maximum(f_full, 1e-9)) * 100.0)
 st.metric("Peak Adjuster % (Compression)", f"{peak_adj_ratio:.1f}%")
-st.info("Target band typically 15–20%. Above this = adjuster doing too much of the job.")
-if peak_adj_ratio < 15:
-    st.warning("Adjuster below 15% authority will have little to no real effect.")
 
 st.markdown("---")
 st.header("Rebound – 6 Point Definition")
 
 rcols = st.columns(6)
-rv = []
-rf_adj = []
-rf_full = []
+rv, rf_adj, rf_full = [], [], []
 
 for i in range(6):
     with rcols[i]:
@@ -300,10 +243,15 @@ r_full_dense = r_curve_full(rv_dense)
 st.subheader("Rebound Results")
 st.write(f"Adj-only model used: Degree {used_r_deg_adj}")
 st.write(f"Full-force model used: Degree {used_r_deg_full}")
-
-line_chart_xy(rv_dense, r_adj_dense, r_full_dense, "Rebound Adj-only (N)", "Rebound Full (N)")
+chart_xy(rv_dense, r_adj_dense, r_full_dense, "Rebound Adj-only", "Rebound Full")
 
 r_peak_adj_ratio = float(np.max(rf_adj / np.maximum(rf_full, 1e-9)) * 100.0)
 st.metric("Peak Adjuster % (Rebound)", f"{r_peak_adj_ratio:.1f}%")
+
+st.info("Target band typically 15–20%. If much higher, the adjuster is doing too much of the job.")
+if peak_adj_ratio < 15:
+    st.warning("Compression adjuster below 15% authority will have little to no real effect.")
+if r_peak_adj_ratio < 15:
+    st.warning("Rebound adjuster below 15% authority will have little to no real effect.")
 
 st.caption("© Mountain Race Shop™ 2025–2026 | Support: fenianparktrading@gmail.com")
