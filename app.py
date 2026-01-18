@@ -21,6 +21,21 @@ from datetime import datetime, timezone
 import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
+
+
+def _get_cfg(key: str, default: str = "") -> str:
+    """Read config from environment first, then Streamlit secrets if available.
+
+    On some hosts (e.g. Render), st.secrets may be unavailable unless a secrets.toml is provided.
+    This helper avoids StreamlitSecretNotFoundError by catching any secrets access errors.
+    """
+    v = os.getenv(key, "")
+    if v:
+        return v
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
 # Streamlit requires page config before any other Streamlit calls.
 st.set_page_config(page_title="Suspension Engineering – Pressure Balance & Adjuster Authority", layout="wide")
 
@@ -104,8 +119,8 @@ This tool converts dyno force data into internal pressures so your setup decisio
     # Collect email + show PayPal button
     email = st.text_input("Email (for receipt + access records)")
 
-    client_id = st.secrets.get("PAYPAL_CLIENT_ID", os.getenv("PAYPAL_CLIENT_ID", ""))
-    plan_id = st.secrets.get("PAYPAL_PLAN_ID", os.getenv("PAYPAL_PLAN_ID", ""))
+    client_id = _get_cfg("PAYPAL_CLIENT_ID")
+    plan_id = _get_cfg("PAYPAL_PLAN_ID")
 
     col1, col2 = st.columns([1, 1])
     with col1:
