@@ -125,6 +125,7 @@ This tool converts dyno force data into internal pressures so your setup decisio
         manual_sub_id = st.text_input("Subscription ID", value=sub_id or "")
         sub_id_final = manual_sub_id.strip() or (sub_id or "")
 
+        email = st.text_input("email (type here)", key="unlock_email")
         if st.button("Unlock"):
             if not email.strip():
                 st.error("Please enter your email.")
