@@ -125,12 +125,17 @@ This tool converts dyno force data into internal pressures so your setup decisio
         st.write("Subscribe to unlock the app.")
 
         # Keep the email input close to the Unlock button so it's never missed.
-        email = st.text_input(
-            "Email (for receipt + access records)",
-            key="unlock_email",
-            placeholder="you@company.com",
-        )
+if "email" not in st.session_state:
+    st.session_state.email = ""
 
+email = st.text_input(
+    "Email (for receipt + access records)",
+    key="email_input",
+    value=st.session_state.email
+)
+st.session_state.email = email
+
+            
         if client_id and plan_id:
             components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
         else:
