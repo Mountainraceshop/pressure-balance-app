@@ -153,16 +153,16 @@ with col1:
                 st.stop()
 
         st.session_state["unlocked"] = True
-            _append_jsonl(
-                os.path.join(_data_dir(), "unlock_log.jsonl"),
+        _append_jsonl(
+        os.path.join(_data_dir(), "unlock_log.jsonl"),
                 {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "email": email.strip(),
-                    "subscription_id": sub_id_final,
-                    "app": "pressure_balance_cubic6",
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "email": email.strip(),
+            "subscription_id": sub_id_final,
+            "app": "pressure_balance_cubic6",
                 },
             )
-            st.success("Unlocked. Loading app…")
+        st.success("Unlocked. Loading app…")
 
     with col2:
         st.subheader("What you need")
