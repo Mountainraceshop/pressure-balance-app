@@ -1,5 +1,5 @@
 """
-Suspension Engineering – Pressure Balance App (Cubic 6‑Point)
+Suspension Engineering – Pressure Balance App (Cubic 6-Point)
 Locked web version (PayPal-gated).
 
 Copyright / TM
@@ -18,10 +18,8 @@ import os
 from datetime import datetime, timezone
 
 import numpy as np
-import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import matplotlib.pyplot as plt
 
 
 # Streamlit requires page config before any other Streamlit calls.
@@ -31,6 +29,7 @@ st.set_page_config(
 )
 
 
+# ---------- Helpers ----------
 def _get_cfg(key: str, default: str = "") -> str:
     """Read config from environment first, then Streamlit secrets if available."""
     v = os.getenv(key, "")
@@ -45,9 +44,9 @@ def _get_cfg(key: str, default: str = "") -> str:
 def _get_query_params() -> dict:
     """Compatibility wrapper across Streamlit versions."""
     try:
-        return dict(st.query_params)  # Streamlit >= 1.30
+        return dict(st.query_params)  # new API
     except Exception:
-        return st.experimental_get_query_params()  # legacy
+        return st.experimental_get_query_params()  # old API
 
 
 def _data_dir() -> str:
@@ -87,7 +86,8 @@ def ensure_unlocked() -> None:
 
     Lightweight verification: stores subscription ID + email for records.
     """
-    # Admin bypass (optional)
+
+    # Emergency bypass (optional)
     if os.getenv("PAYMENT_DISABLED", "0") == "1":
         st.session_state["unlocked"] = True
         return
@@ -95,12 +95,11 @@ def ensure_unlocked() -> None:
     if st.session_state.get("unlocked"):
         return
 
-    # Read subscription_id from query param (after PayPal approve redirect)
     qp = _get_query_params()
-    sub_id_from_qp = ""
+    sub_id = ""
     if "subscription_id" in qp:
         v = qp["subscription_id"]
-        sub_id_from_qp = v[0] if isinstance(v, list) else str(v)
+        sub_id = v[0] if isinstance(v, list) else str(v)
 
     st.title("Pressure Balance App")
     st.caption("Mountain Race Shop™ | Suspension Engineering™")
@@ -125,34 +124,34 @@ This tool converts dyno force data into internal pressures so your setup decisio
         st.subheader("Unlock access")
         st.write("Subscribe to unlock the app.")
 
-        # Email input (must always be editable)
-        st.session_state.setdefault("email", "")
+        # Email input (make it stable + always editable)
+        if "email_value" not in st.session_state:
+            st.session_state["email_value"] = ""
+
         email = st.text_input(
             "Email (for receipt + access records)",
             key="email_input",
-            value=st.session_state["email"],
+            value=st.session_state["email_value"],
+            placeholder="you@company.com",
         )
-        st.session_state["email"] = email
+        st.session_state["email_value"] = email
 
-        # PayPal subscribe button (optional)
         if client_id and plan_id:
-            components.html(
-                paypal_subscribe_button_html(client_id, plan_id),
-                height=220,
-            )
+            components.html(paypal_subscribe_button_html(client_id, plan_id), height=220)
         else:
             st.warning(
-                "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in your host (Render) environment variables."
+                "PayPal is not configured yet. Set PAYPAL_CLIENT_ID and PAYPAL_PLAN_ID in Render environment variables."
             )
 
         st.write("Already subscribed? Paste your PayPal subscription ID:")
 
         manual_sub_id = st.text_input(
             "Subscription ID",
-            value=sub_id_from_qp,
             key="sub_id_input",
+            value=sub_id or "",
+            placeholder="I-XXXXXXXXXXXX",
         )
-        sub_id_final = (manual_sub_id or "").strip() or (sub_id_from_qp or "").strip()
+        sub_id_final = (manual_sub_id or "").strip() or (sub_id or "").strip()
 
         if st.button("Unlock", key="unlock_btn"):
             if not email.strip():
@@ -164,6 +163,7 @@ This tool converts dyno force data into internal pressures so your setup decisio
                 st.stop()
 
             st.session_state["unlocked"] = True
+
             _append_jsonl(
                 os.path.join(_data_dir(), "unlock_log.jsonl"),
                 {
@@ -173,6 +173,7 @@ This tool converts dyno force data into internal pressures so your setup decisio
                     "app": "pressure_balance_cubic6",
                 },
             )
+
             st.success("Unlocked. Loading app…")
             st.rerun()
 
@@ -195,31 +196,45 @@ Then choose Linear / Quadratic / Cubic and compare how well each model fits your
     st.stop()
 
 
+# ---------- Curve fit ----------
 def fit_curve(x: np.ndarray, y: np.ndarray, model_name: str):
     deg = {"Linear": 1, "Quadratic": 2, "Cubic": 3}[model_name]
-    uniq = len(np.unique(x))
-    if uniq <= deg:
-        deg = max(0, uniq - 1)
-    coeffs = np.polyfit(x, y, deg) if deg > 0 else np.array([float(np.mean(y))])
-    poly = np.poly1d(coeffs)
-    return poly, deg
+
+    # Reduce degree if not enough unique points
+    unique_n = len(np.unique(x))
+    if unique_n <= deg:
+        deg = max(1, unique_n - 1)
+
+    coeffs = np.polyfit(x, y, deg)
+    return np.poly1d(coeffs), deg
 
 
-# -------------------------
-# App starts here
-# -------------------------
+def line_chart_xy(x: np.ndarray, y1: np.ndarray, y2: np.ndarray, label1: str, label2: str):
+    """Try to chart with x-axis. If pandas isn't available, fall back to array chart."""
+    try:
+        import pandas as pd  # streamlit usually has this; but guard anyway
+
+        df = pd.DataFrame({label1: y1, label2: y2}, index=x)
+        df.index.name = "Velocity (m/s)"
+        st.line_chart(df)
+    except Exception:
+        # fallback (x-axis becomes row index)
+        st.line_chart(np.column_stack([y1, y2]))
+
+
+# ---------- Main ----------
 ensure_unlocked()
 
 st.title("Suspension Engineering – Pressure Balance, Adjuster Authority & Damping Targets")
-st.caption("© Mountain Race Shop™ 2025–2026. All rights reserved.")
+st.caption("© Mountain Race Shop™ 2025–2026 | Support: fenianparktrading@gmail.com")
 
-model = st.sidebar.selectbox("Curve fit model", ["Linear", "Quadratic", "Cubic"])
+model = st.sidebar.selectbox("Curve fit model", ["Linear", "Quadratic", "Cubic"], key="curve_model")
 
 st.sidebar.header("Geometry & Pressure Inputs")
-p1 = st.sidebar.number_input("Baseline pressure P1 (bar)", value=10.0)
-rod_d = st.sidebar.number_input("Rod diameter (mm)", value=10.0)
-piston_d = st.sidebar.number_input("Body / piston diameter (mm)", value=46.0)
-v_ref = st.sidebar.number_input("Velocity reference (m/s)", value=1.0)
+p1 = st.sidebar.number_input("Baseline pressure P1 (bar)", value=10.0, key="p1")
+rod_d = st.sidebar.number_input("Rod diameter (mm)", value=10.0, key="rod_d")
+piston_d = st.sidebar.number_input("Body / piston diameter (mm)", value=46.0, key="piston_d")
+v_ref = st.sidebar.number_input("Velocity reference (m/s)", value=1.0, key="v_ref")
 
 st.header("Compression – 6 Point Definition")
 
@@ -227,11 +242,12 @@ cols = st.columns(6)
 v = []
 f_adj = []
 f_full = []
+
 for i in range(6):
     with cols[i]:
-        v.append(st.number_input(f"V{i+1} (m/s)", value=0.5 * (i + 1)))
-        f_adj.append(st.number_input(f"Adj-only F{i+1} (N)", value=300 * (i + 1)))
-        f_full.append(st.number_input(f"Full F{i+1} (N)", value=1200 * (i + 1)))
+        v.append(st.number_input(f"V{i+1} (m/s)", value=0.5 * (i + 1), key=f"cv{i+1}"))
+        f_adj.append(st.number_input(f"Adj-only F{i+1} (N)", value=300 * (i + 1), key=f"cfa{i+1}"))
+        f_full.append(st.number_input(f"Full F{i+1} (N)", value=1200 * (i + 1), key=f"cff{i+1}"))
 
 v = np.array(v, dtype=float)
 f_adj = np.array(f_adj, dtype=float)
@@ -240,37 +256,35 @@ f_full = np.array(f_full, dtype=float)
 curve_adj, used_deg_adj = fit_curve(v, f_adj, model)
 curve_full, used_deg_full = fit_curve(v, f_full, model)
 
-v_dense = np.linspace(float(np.min(v)), float(np.max(v)), 200) if len(v) else np.array([0.0])
+v_dense = np.linspace(float(np.min(v)), float(np.max(v)), 200)
 adj_dense = curve_adj(v_dense)
 full_dense = curve_full(v_dense)
 
-st.subheader("Results")
+st.subheader("Compression Results")
 st.write(f"Adj-only model used: Degree {used_deg_adj}")
 st.write(f"Full-force model used: Degree {used_deg_full}")
 
-df_comp = pd.DataFrame(
-    {
-        "Adj-only force (N)": adj_dense,
-        "Full force (N)": full_dense,
-    },
-    index=v_dense,
-)
-df_comp.index.name = "Velocity (m/s)"
-st.line_chart(df_comp)
+line_chart_xy(v_dense, adj_dense, full_dense, "Adj-only force (N)", "Full force (N)")
 
-with np.errstate(divide="ignore", invalid="ignore"):
-    ratio = np.where(f_full != 0, f_adj / f_full, np.nan)
-peak_adj_ratio = float(np.nanmax(ratio) * 100) if np.isfinite(np.nanmax(ratio)) else 0.0
+peak_adj_ratio = float(np.max(f_adj / np.maximum(f_full, 1e-9)) * 100.0)
+st.metric("Peak Adjuster % (Compression)", f"{peak_adj_ratio:.1f}%")
+st.info("Target band typically 15–20%. Above this = adjuster doing too much of the job.")
+if peak_adj_ratio < 15:
+    st.warning("Adjuster below 15% authority will have little to no real effect.")
 
-st.markdown("## Rebound – 6 Point Definition")
+st.markdown("---")
+st.header("Rebound – 6 Point Definition")
 
+rcols = st.columns(6)
 rv = []
 rf_adj = []
 rf_full = []
-for i in range(1, 7):
-    rv.append(st.number_input(f"R V{i} (m/s)", value=float(i) * 0.5, key=f"rv{i}"))
-    rf_adj.append(st.number_input(f"Rebound Adj-only F{i} (N)", value=500 * i, key=f"rfadj{i}"))
-    rf_full.append(st.number_input(f"Rebound Full F{i} (N)", value=1500 * i, key=f"rffull{i}"))
+
+for i in range(6):
+    with rcols[i]:
+        rv.append(st.number_input(f"R V{i+1} (m/s)", value=0.5 * (i + 1), key=f"rv{i+1}"))
+        rf_adj.append(st.number_input(f"Rebound Adj-only F{i+1} (N)", value=500 * (i + 1), key=f"rfa{i+1}"))
+        rf_full.append(st.number_input(f"Rebound Full F{i+1} (N)", value=1500 * (i + 1), key=f"rff{i+1}"))
 
 rv = np.array(rv, dtype=float)
 rf_adj = np.array(rf_adj, dtype=float)
@@ -279,26 +293,17 @@ rf_full = np.array(rf_full, dtype=float)
 r_curve_adj, used_r_deg_adj = fit_curve(rv, rf_adj, model)
 r_curve_full, used_r_deg_full = fit_curve(rv, rf_full, model)
 
-rv_dense = np.linspace(float(np.min(rv)), float(np.max(rv)), 200) if len(rv) else np.array([0.0])
+rv_dense = np.linspace(float(np.min(rv)), float(np.max(rv)), 200)
 r_adj_dense = r_curve_adj(rv_dense)
 r_full_dense = r_curve_full(rv_dense)
 
-st.markdown("### Rebound Results")
-st.write(f"Rebound Adj-only model used: Degree {used_r_deg_adj}")
-st.write(f"Rebound Full-force model used: Degree {used_r_deg_full}")
+st.subheader("Rebound Results")
+st.write(f"Adj-only model used: Degree {used_r_deg_adj}")
+st.write(f"Full-force model used: Degree {used_r_deg_full}")
 
-fig2, ax2 = plt.subplots()
-ax2.plot(rv_dense, r_adj_dense, label="Rebound Adj-only")
-ax2.plot(rv_dense, r_full_dense, label="Rebound Full")
-ax2.legend()
-ax2.set_xlabel("Velocity (m/s)")
-ax2.set_ylabel("Force (N)")
-st.pyplot(fig2)
+line_chart_xy(rv_dense, r_adj_dense, r_full_dense, "Rebound Adj-only (N)", "Rebound Full (N)")
 
-st.metric("Peak Adjuster %", f"{peak_adj_ratio:.1f}%")
-
-st.info("Target band typically 15–20%. Above this = adjuster doing too much of the job.")
-if peak_adj_ratio < 15:
-    st.warning("Adjuster below 15% authority will have little to no real effect.")
+r_peak_adj_ratio = float(np.max(rf_adj / np.maximum(rf_full, 1e-9)) * 100.0)
+st.metric("Peak Adjuster % (Rebound)", f"{r_peak_adj_ratio:.1f}%")
 
 st.caption("© Mountain Race Shop™ 2025–2026 | Support: fenianparktrading@gmail.com")
