@@ -87,7 +87,7 @@ def ensure_unlocked() -> None:
 
     This intentionally keeps verification lightweight (stores subscription ID + email for records).
     """
-
+  
     if os.getenv("PAYMENT_DISABLED", "0") == "1":
         st.session_state["unlocked"] = True
         return
@@ -102,8 +102,10 @@ def ensure_unlocked() -> None:
         v = qp["subscription_id"]
         sub_id = v[0] if isinstance(v, list) else v
 
-    st.title("Pressure Balance App")
-    st.caption("Mountain Race Shop™ | Suspension Engineering™")
+ensure_unlocked()
+    
+st.title("Pressure Balance App")
+st.caption("Mountain Race Shop™ | Suspension Engineering™")
 
     st.markdown(
         """
@@ -116,8 +118,11 @@ This tool converts dyno force data into internal pressures so your setup decisio
         """
     )
 
-    # Collect email + show PayPal button
-    email = st.text_input("Email (for receipt + access records)")
+   # Collect email + show PayPal button
+if "email" not in st.session_state:
+    st.session_state["email"] = ""
+
+email = st.text_input("Email (for receipt + access records)", key="email")
 
     client_id = _get_cfg("PAYPAL_CLIENT_ID")
     plan_id = _get_cfg("PAYPAL_PLAN_ID")
@@ -157,7 +162,6 @@ This tool converts dyno force data into internal pressures so your setup decisio
                 },
             )
             st.success("Unlocked. Loading app…")
-            st.rerun()
 
     with col2:
         st.subheader("What you need")
@@ -175,10 +179,10 @@ Then choose Linear / Quadratic / Cubic and compare how well each model fits your
 
     st.markdown("---")
     st.caption("© Mountain Race Shop™ 2025–2026. All rights reserved.")
-    st.stop()
+    
 
 
-ensure_unlocked()
+
 
 st.title("Suspension Engineering – Pressure Balance, Adjuster Authority & Damping Targets")
 st.caption("© Mountain Race Shop™ 2025–2026. All rights reserved.")
