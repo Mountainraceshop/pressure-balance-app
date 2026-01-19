@@ -117,9 +117,13 @@ def ensure_unlocked() -> None:
     st.write("Subscribe to unlock the app.")
 
     # Email input (must be editable)
+    # Use a UNIQUE key so we don't get stuck with any bad/old session_state from earlier versions.
+    if "unlock_email_input_v25" not in st.session_state:
+        st.session_state["unlock_email_input_v25"] = ""
+
     email = st.text_input(
         "Email (for receipt + access records)",
-        key="email",  # <- single source of truth
+        key="unlock_email_input_v25",
         placeholder="your@email.com",
     )
 
